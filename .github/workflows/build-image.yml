@@ -1,8 +1,8 @@
 name: build-image
 
-# Produces a 32-bit Debian kernel + initrd for the site. v86 has no long mode,
-# so everything here is pinned to i386. The rootfs is packed as the initrd
-# itself, so the browser only ever downloads two files.
+# Builds the guest: a Debian i386 rootfs packed as an initrd, paired with the
+# built-in-driver kernel from build-kernel. v86 has no long mode, so every
+# artifact here is 32-bit.
 
 on:
   workflow_dispatch:
@@ -15,7 +15,11 @@ permissions:
   contents: write
 
 jobs:
+  kernel:
+    uses: ./.github/workflows/build-kernel.yml
+
   debian-i386:
+    needs: kernel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,10 +29,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y debootstrap cpio
 
+      - name: Fetch custom kernel
+        uses: actions/download-artifact@v4
+        with:
+          name: kernel-i386
+          path: kernel-out
+
       - name: Bootstrap Debian i386 rootfs
         run: |
           sudo debootstrap --arch=i386 --variant=minbase \
-            --include=linux-image-686,sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
+            --include=sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
             --exclude=systemd,systemd-sysv \
             bookworm rootfs http://deb.debian.org/debian
 
@@ -42,24 +52,22 @@ jobs:
           # Empty password field so getty on ttyS0 drops straight into root.
           sudo sed -i 's|^root:[^:]*|root:|' rootfs/etc/shadow
 
-      - name: Extract kernel
-        run: |
-          kernel="$(ls rootfs/boot/vmlinuz-* | head -1)"
-          test -n "$kernel"
-          sudo cp "$kernel" debian-bzImage
-          ls -l debian-bzImage
-
       - name: Trim the rootfs
         run: |
           sudo rm -rf rootfs/var/lib/apt/lists rootfs/var/cache/apt/archives \
                      rootfs/usr/share/doc rootfs/usr/share/man rootfs/usr/share/locale \
-                     rootfs/boot System.map rootfs/lib/modules/*/build
+                     rootfs/usr/share/i18n rootfs/lib/modules
           sudo du -sh rootfs
 
       - name: Pack initrd
         run: |
           sudo find rootfs -depth -print0 | sudo cpio --null -o -H newc | gzip -9 > debian-initrd
           ls -l debian-initrd
+
+      - name: Stage kernel
+        run: |
+          cp kernel-out/bzImage debian-bzImage
+          ls -l debian-bzImage
 
       - uses: actions/upload-artifact@v4
         with:
