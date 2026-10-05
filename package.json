@@ -1,0 +1,17 @@
+{
+  "name": "browser-linux",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "A real Linux booted in the browser, shipped as a static site",
+  "scripts": {
+    "vendor": "node tools/sync-vendor.mjs",
+    "assets": "node tools/fetch-assets.mjs",
+    "setup": "npm run vendor && npm run assets",
+    "dev": "node tools/serve.mjs"
+  },
+  "dependencies": {
+    "@xterm/xterm": "^6.0.0",
+    "v86": "0.5.470"
+  }
+}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Linux in the browser</title>
+    <link rel="stylesheet" href="/vendor/xterm.css" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script src="/vendor/xterm.js"></script>
+  </head>
+  <body>
+    <header class="bar">
+      <span class="brand">browser-linux</span>
+      <span id="status" class="status" role="status">准备中</span>
+      <span id="metrics" class="metrics"></span>
+      <span class="spacer"></span>
+      <button id="btn-run" type="button" disabled>暂停</button>
+      <button id="btn-reset" type="button" disabled>重启</button>
+    </header>
+
+    <div id="boot" class="boot">
+      <div class="boot-inner">
+        <h1 id="boot-title">Linux</h1>
+        <p class="sub">内核由 wasm x86 模拟器带动,不是终端模拟。</p>
+        <div class="progress" id="progress" hidden>
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <p class="file" id="file-label"></p>
+        <button id="btn-boot" type="button">启动</button>
+      </div>
+    </div>
+
+    <main id="terminal" class="terminal" aria-label="串口终端"></main>
+    <div id="screen" class="screen" tabindex="0" hidden>
+      <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
+      <canvas style="display: none"></canvas>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

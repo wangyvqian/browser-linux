@@ -1,0 +1,55 @@
+name: build-image
+
+# Produces a 32-bit Debian kernel + initrd for the site. v86 has no long mode,
+# so everything here is pinned to i386.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/build-image.yml"
+      - "image/**"
+
+permissions:
+  contents: write
+
+jobs:
+  debian-i386:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap squashfs-tools cpio
+
+      - name: Bootstrap Debian i386 rootfs
+        run: |
+          sudo debootstrap --arch=i386 --variant=minbase \
+            --include=sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
+            --exclude=systemd,systemd-sysv \
+            bookworm rootfs http://deb.debian.org/debian
+
+      - name: Configure serial console and init
+        run: |
+          sudo cp image/inittab rootfs/etc/inittab
+          sudo cp image/fstab rootfs/etc/fstab
+          echo "browser-linux" | sudo tee rootfs/etc/hostname
+          # Empty password field so getty on ttyS0 drops straight into root.
+          sudo sed -i 's|^root:[^:]*|root:|' rootfs/etc/shadow
+
+      - name: Pack initrd
+        run: |
+          sudo find rootfs -depth -print0 | sudo cpio --null -o -H newc | gzip -9 > debian-initrd
+
+      - name: Extract kernel
+        run: |
+          sudo cp "$(ls rootfs/boot/vmlinuz-* | head -1)" debian-bzImage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debian-i386
+          path: |
+            debian-bzImage
+            debian-initrd

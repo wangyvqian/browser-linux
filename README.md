@@ -1,0 +1,38 @@
+# browser-linux
+
+在浏览器里真的 boot 一个 Linux:x86 模拟器跑真内核,纯静态站点,打开链接就能用。
+
+## 跑起来
+
+```bash
+npm install
+npm run setup   # 同步 vendor 资源 + 下载 BIOS 和测试镜像
+npm run dev     # http://localhost:8000/
+```
+
+## 已验证
+
+`node tools/boot-test.mjs vga` 会真的启一个内核并在 shell 里执行命令,当前通过:
+
+```
+PASS [vga]: linux.iso booted to a usable shell
+Linux (none) 2.6.34.14 #44 Tue Oct 15 20:50:15 CEST 2013 i686 GNU/Linux
+```
+
+## 硬约束
+
+- **v86 没有 long mode,只能跑 32 位内核。** 这也是选 Debian i386 而不是 Ubuntu 的原因:Ubuntu 的 i386 停在 16.04/18.04。
+- 官方 `i.copy.sh/buildroot-bzimage68.bin` 是 64 位内核,在 v86 里**静默挂死**(串口和 VGA 都没有任何输出),不要拿它当测试镜像。
+- 纯静态页面下 guest 没有网络,apt 只能在构建时用。运行时联网需要一个中转服务。
+- v86 主循环挂在 `requestAnimationFrame` 上,**标签页不可见时会被节流到几乎不执行**(实测 0.3 MIPS)。真机验证必须让页面保持可见。
+
+## 目录
+
+- `public/` — web root,直接部署到 GitHub Pages
+- `public/src/config.js` — 启动 profile,决定用哪个镜像、走 VGA 还是串口
+- `tools/` — vendor 同步、资源下载、静态服务器、启动冒烟测试
+- `image/` + `.github/workflows/build-image.yml` — Debian i386 镜像构建,产物是 `debian-bzImage` 和 `debian-initrd`
+
+## 状态
+
+测试镜像(VGA)已跑通。自建 Debian i386 镜像的 CI 流程尚未在真实 runner 上验证过,`debian` profile 要等它产出镜像才可用。
