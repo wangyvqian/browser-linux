@@ -1,7 +1,8 @@
 name: build-image
 
 # Produces a 32-bit Debian kernel + initrd for the site. v86 has no long mode,
-# so everything here is pinned to i386.
+# so everything here is pinned to i386. The rootfs is packed as the initrd
+# itself, so the browser only ever downloads two files.
 
 on:
   workflow_dispatch:
@@ -22,12 +23,12 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap squashfs-tools cpio
+          sudo apt-get install -y debootstrap cpio
 
       - name: Bootstrap Debian i386 rootfs
         run: |
           sudo debootstrap --arch=i386 --variant=minbase \
-            --include=sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
+            --include=linux-image-686,sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
             --exclude=systemd,systemd-sysv \
             bookworm rootfs http://deb.debian.org/debian
 
@@ -35,17 +36,30 @@ jobs:
         run: |
           sudo cp image/inittab rootfs/etc/inittab
           sudo cp image/fstab rootfs/etc/fstab
+          sudo cp image/init rootfs/init
+          sudo chmod 755 rootfs/init
           echo "browser-linux" | sudo tee rootfs/etc/hostname
           # Empty password field so getty on ttyS0 drops straight into root.
           sudo sed -i 's|^root:[^:]*|root:|' rootfs/etc/shadow
 
+      - name: Extract kernel
+        run: |
+          kernel="$(ls rootfs/boot/vmlinuz-* | head -1)"
+          test -n "$kernel"
+          sudo cp "$kernel" debian-bzImage
+          ls -l debian-bzImage
+
+      - name: Trim the rootfs
+        run: |
+          sudo rm -rf rootfs/var/lib/apt/lists rootfs/var/cache/apt/archives \
+                     rootfs/usr/share/doc rootfs/usr/share/man rootfs/usr/share/locale \
+                     rootfs/boot System.map rootfs/lib/modules/*/build
+          sudo du -sh rootfs
+
       - name: Pack initrd
         run: |
           sudo find rootfs -depth -print0 | sudo cpio --null -o -H newc | gzip -9 > debian-initrd
-
-      - name: Extract kernel
-        run: |
-          sudo cp "$(ls rootfs/boot/vmlinuz-* | head -1)" debian-bzImage
+          ls -l debian-initrd
 
       - uses: actions/upload-artifact@v4
         with:

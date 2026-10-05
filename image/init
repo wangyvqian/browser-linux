@@ -1,0 +1,9 @@
+#!/bin/sh
+# The rootfs is loaded as an initrd, and the kernel only ever execs /init from
+# an initramfs. Mount the kernel filesystems, then hand over to sysvinit.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+mount -t tmpfs tmpfs /run
+
+exec /sbin/init "$@"
