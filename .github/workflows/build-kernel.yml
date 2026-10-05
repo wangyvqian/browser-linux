@@ -36,7 +36,7 @@ jobs:
         working-directory: linux
         run: |
           make ARCH=x86 i386_defconfig
-          ../kernel/config.sh
+          sh ../kernel/config.sh
           make ARCH=x86 olddefconfig
           grep -E '^CONFIG_X86_32=|^CONFIG_X86_PAE|^CONFIG_MODULES' .config || true
 
