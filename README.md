@@ -22,7 +22,9 @@ Linux (none) 2.6.34.14 #44 Tue Oct 15 20:50:15 CEST 2013 i686 GNU/Linux
 ## 硬约束
 
 - **v86 没有 long mode,只能跑 32 位内核。** 这也是选 Debian i386 而不是 Ubuntu 的原因:Ubuntu 的 i386 停在 16.04/18.04。
-- 官方 `i.copy.sh/buildroot-bzimage68.bin` 是 64 位内核,在 v86 里**静默挂死**(串口和 VGA 都没有任何输出),不要拿它当测试镜像。
+- **直接内核启动(`bzimage`)必须同时提供 `bios` 和 `vga_bios`。** 少了它们,v86 会在实模式下跳进内核入口,表现为 `instr16_E8` 断言崩溃,串口和 VGA 一个字节都不出。`examples/serial.html` 不给 BIOS 的写法在当前版本是坏的。
+- **内核命令行要带 `noapic nolapic`。** v86 的 APIC/IOAPIC 支持不完整,不开这两个参数内核会在 `setup_IO_APIC` 里空指针崩掉。
+- 官方 `i.copy.sh/buildroot-bzimage68.bin` 在 v86 里静默挂死,不要拿它当测试镜像。
 - 纯静态页面下 guest 没有网络,apt 只能在构建时用。运行时联网需要一个中转服务。
 - v86 主循环挂在 `requestAnimationFrame` 上,**标签页不可见时会被节流到几乎不执行**(实测 0.3 MIPS)。真机验证必须让页面保持可见。
 

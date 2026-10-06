@@ -16,17 +16,21 @@ export const PROFILES = {
     label: "Debian i386 (串口终端)",
     memory_size: 256 * 1024 * 1024,
     console: "serial",
+    bios: { url: "/bios/seabios.bin" },
+    vga_bios: { url: "/bios/vgabios.bin" },
     bzimage: { url: "/images/debian-bzImage", async: false },
     initrd: { url: "/images/debian-initrd", async: false },
-    cmdline: "console=ttyS0,115200 tsc=reliable mitigations=off",
+    cmdline: "console=ttyS0,115200 noapic nolapic tsc=reliable mitigations=off",
   },
   desktop: {
     label: "Debian i386 桌面 (X11 + openbox)",
     memory_size: 512 * 1024 * 1024,
     console: "screen",
+    bios: { url: "/bios/seabios.bin" },
+    vga_bios: { url: "/bios/vgabios.bin" },
     bzimage: { url: "/images/debian-bzImage", async: false },
     initrd: { url: "/images/debian-initrd", async: false },
-    cmdline: "console=ttyS0,115200 tsc=reliable mitigations=off browserlinux.desktop",
+    cmdline: "console=ttyS0,115200 noapic nolapic tsc=reliable mitigations=off browserlinux.desktop",
   },
 };
 

@@ -1,10 +1,24 @@
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
-import { V86 } from "../public/vendor/libv86.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROFILE = process.argv[2] ?? "vga";
 const TIMEOUT_MS = Number(process.argv[3] ?? 120000);
+
+// V86_DEBUG=1 runs the assertions build, which aborts loudly on instructions
+// and devices v86 does not implement instead of spinning silently.
+// V86_DIR overrides which build directory to load, for bisecting emulator
+// regressions across published v86 versions.
+const debug = process.env.V86_DEBUG === "1";
+const dir = process.env.V86_DIR;
+const libFile = debug ? "libv86-debug.mjs" : "libv86.mjs";
+const libPath = dir
+  ? path.join(dir, libFile)
+  : path.join(root, debug ? "node_modules/v86/build" : "public/vendor", libFile);
+const wasm = dir
+  ? path.join(dir, debug ? "v86-debug.wasm" : "v86.wasm")
+  : path.join(root, "node_modules/v86/build", debug ? "v86-debug.wasm" : "v86.wasm");
+const { V86 } = await import(pathToFileURL(libPath).href);
 
 const PROFILES = {
   vga: {
@@ -20,8 +34,39 @@ const PROFILES = {
   debian: {
     image: "debian-bzImage",
     options: {
+      bios: { url: path.join(root, "public/bios/seabios.bin") },
+      vga_bios: { url: path.join(root, "public/bios/vgabios.bin") },
       bzimage: { url: path.join(root, "public/images/debian-bzImage"), async: false },
       initrd: { url: path.join(root, "public/images/debian-initrd"), async: false },
+      cmdline: "console=ttyS0,115200 noapic nolapic",
+    },
+  },
+  // Bisection pair: stock Debian kernel with our initrd, and stock with stock.
+  // The second is the control — if it fails, the harness is wrong, not the kernel.
+  "stock-kernel": {
+    image: "stock/debian-bzImage",
+    options: {
+      bzimage: { url: path.join(root, "public/images/stock/debian-bzImage"), async: false },
+      initrd: { url: path.join(root, "public/images/debian-initrd"), async: false },
+      cmdline: "console=ttyS0,115200 rw",
+    },
+  },
+  // Kernel alone, no initrd: mirrors examples/serial.html, the shape known to
+  // work. Isolates whether passing `initrd` is what breaks the boot.
+  "kernel-only": {
+    image: "debian-bzImage",
+    options: {
+      bios: { url: path.join(root, "public/bios/seabios.bin") },
+      vga_bios: { url: path.join(root, "public/bios/vgabios.bin") },
+      bzimage: { url: path.join(root, "public/images/debian-bzImage"), async: false },
+      cmdline: "console=ttyS0,115200 noapic nolapic",
+    },
+  },
+  "stock-full": {
+    image: "stock/debian-bzImage + stock initrd",
+    options: {
+      bzimage: { url: path.join(root, "public/images/stock/debian-bzImage"), async: false },
+      initrd: { url: path.join(root, "public/images/stock/debian-initrd"), async: false },
       cmdline: "console=ttyS0,115200 rw",
     },
   },
@@ -43,10 +88,11 @@ setInterval(() => {
 }, 500).unref();
 
 const emulator = new V86({
-  wasm_path: path.join(root, "public/vendor/v86.wasm"),
-  memory_size: 128 * 1024 * 1024,
+  wasm_path: wasm,
+  memory_size: 512 * 1024 * 1024,
   autostart: true,
   disable_speaker: true,
+  ...(debug ? { log_level: Number(process.env.V86_LOG ?? (0x1 | 0x4000)) } : {}),
   ...PROFILES[PROFILE].options,
 });
 
