@@ -12,6 +12,7 @@
     "probe": "node tools/probe-server.mjs"
   },
   "dependencies": {
+    "@mercuryworkshop/wisp-js": "^0.5.0",
     "@xterm/xterm": "^6.0.0",
     "v86": "0.5.470"
   },
