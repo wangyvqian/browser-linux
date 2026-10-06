@@ -21,33 +21,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build tools
+      # A full kernel build is ~10 minutes; the image jobs would rebuild it on
+      # every tweak to the rootfs recipe without this.
+      - name: Restore cached kernel
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: bzImage-${{ env.KERNEL_VERSION }}-${{ hashFiles('kernel/config.sh') }}
+
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential bison flex libssl-dev libelf-dev bc cpio xz-utils
 
-      - name: Fetch kernel source
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Fetch kernel source
         run: |
           curl -fsSL "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${KERNEL_VERSION}.tar.xz" \
             | tar -xJ
           mv "linux-${KERNEL_VERSION}" linux
 
-      - name: Configure
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Configure
         working-directory: linux
         run: |
           make ARCH=x86 i386_defconfig
           sh ../kernel/config.sh
           make ARCH=x86 olddefconfig
-          grep -E '^CONFIG_X86_32=|^CONFIG_X86_PAE|^CONFIG_MODULES' .config || true
+          grep -E '^CONFIG_X86_32=|^CONFIG_X86_PAE|^CONFIG_MODULES|^CONFIG_RELOCATABLE' .config || true
 
-      - name: Build
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Build
         working-directory: linux
-        run: make ARCH=x86 -j"$(nproc)" bzImage
+        run: |
+          make ARCH=x86 -j"$(nproc)" bzImage
+          mkdir -p ../cache
+          cp arch/x86/boot/bzImage ../cache/bzImage
 
       - name: Report size
-        run: ls -l linux/arch/x86/boot/bzImage
+        run: ls -l cache/bzImage
 
       - uses: actions/upload-artifact@v4
         with:
           name: kernel-i386
-          path: linux/arch/x86/boot/bzImage
+          path: cache/bzImage

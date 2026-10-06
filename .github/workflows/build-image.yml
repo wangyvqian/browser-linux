@@ -69,9 +69,9 @@ jobs:
           # level of the cpio, so a "rootfs/" prefix would hide it.
           sudo sh -c 'cd rootfs && find . -depth -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9' > debian-initrd
           ls -l debian-initrd
-          echo '--- top-level entries in the archive ---'
-          sudo sh -c 'gzip -dc debian-initrd | cpio -t --quiet 2>/dev/null' | grep -vE '^\./[^/]+/' | head -20
-          sudo sh -c 'gzip -dc debian-initrd | cpio -t --quiet 2>/dev/null' | grep -qxE '\./?init'
+          # GNU cpio stores "init", not "./init" — match both.
+          sudo sh -c 'gzip -dc debian-initrd | cpio -t --quiet 2>/dev/null' > entries.txt
+          grep -xE '(\./)?init' entries.txt
 
       - name: Stage kernel
         run: |
