@@ -35,6 +35,8 @@
         log.append(line);
       };
       document.getElementById("origin").textContent = location.origin;
+      const secure = location.protocol === "https:";
+      if (!secure) say("注意:当前不是 https 来源,这次只能证明探针本身能跑,混合内容这条还没测到。", "bad");
 
       document.getElementById("ws").addEventListener("click", () => {
         const url = "ws://127.0.0.1:48120/probe";
@@ -46,7 +48,12 @@
         }, 5000);
         socket.onopen = () => {
           clearTimeout(timer);
-          say("onopen:握手成功 —— https 页面可以连本机 WebSocket。", "ok");
+          say(
+            secure
+              ? "onopen:握手成功 —— https 页面确实能连本机 WebSocket,助手方案的前提成立。"
+              : "onopen:握手成功(当前是 http 来源,混合内容这条仍未覆盖)。",
+            "ok",
+          );
           socket.send("ping");
         };
         socket.onmessage = (event) => say(`收到回复:${event.data}`, "ok");
