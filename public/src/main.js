@@ -1,5 +1,5 @@
-import { V86 } from "/vendor/libv86.mjs";
-import { ACTIVE, PROFILES } from "/src/config.js";
+import { V86 } from "../vendor/libv86.mjs";
+import { ACTIVE, BASE, PROFILES } from "./config.js";
 
 const el = (id) => document.getElementById(id);
 const ui = {
@@ -27,7 +27,7 @@ for (const [key, profile] of Object.entries(PROFILES)) {
   select.append(option);
 }
 select.value = new URLSearchParams(location.search).get("profile") ?? "test-vga";
-select.addEventListener("change", () => location.assign(`/?profile=${select.value}`));
+select.addEventListener("change", () => location.assign(`${location.pathname}?profile=${select.value}`));
 
 function setStatus(text, kind = "") {
   ui.status.textContent = text;
@@ -114,7 +114,7 @@ async function boot() {
   delete images.memory_size;
 
   emulator = new V86({
-    wasm_path: "/vendor/v86.wasm",
+    wasm_path: `${BASE}vendor/v86.wasm`,
     memory_size: ACTIVE.memory_size,
     autostart: true,
     disable_speaker: true,

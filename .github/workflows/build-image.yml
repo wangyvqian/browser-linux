@@ -197,19 +197,22 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v4
 
-      # Pages propagation lags, so retry. Without this a missing vendor file
-      # ships silently and the page just never boots.
+      # Pages propagation lags, so retry. Checks the paths the page actually
+      # references rather than a hand-written list, because root-absolute URLs
+      # 404 on a project Pages site and look identical to a broken boot.
       - name: Smoke check the deployed site
         run: |
           base="https://wangyvqian.github.io/browser-linux"
-          paths="/ vendor/v86.wasm vendor/libv86.mjs src/main.js src/config.js bios/seabios.bin images/debian-bzImage images/debian-initrd images/desktop-chunks/chunk-0-131072.zst probe.html"
+          refs=$(curl -s --max-time 30 "$base/" | grep -oE '(href|src)="[^"]+"' | sed -E 's/.*="([^"]+)"/\1/' | grep -v '^http' | sort -u)
+          paths="$refs images/desktop-chunks/chunk-0-131072.zst probe.html"
+          echo "checking: $paths"
           for attempt in 1 2 3 4 5 6; do
             missing=""
             for path in $paths; do
               code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$base/$path" || echo 000)
               case "$code" in 200|206) ;; *) missing="$missing $path($code)" ;; esac
             done
-            if [ -z "$missing" ]; then echo "all assets live"; exit 0; fi
+            if [ -z "$missing" ]; then echo "all referenced assets live"; exit 0; fi
             echo "attempt $attempt missing:$missing"; sleep 20
           done
           echo "still missing after retries:$missing"
