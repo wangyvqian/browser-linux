@@ -89,6 +89,32 @@ button:disabled { opacity: .45; cursor: default; }
 
 .hidden { display: none !important; }
 
+.ctx-menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 12rem;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .45);
+}
+.ctx-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+.ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 6px 10px;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+.ctx-item:hover { background: #1d2937; }
+.ctx-item.danger { color: var(--bad); }
+
 #bootlog-panel {
   position: fixed;
   left: 0;

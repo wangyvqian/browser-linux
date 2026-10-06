@@ -1,5 +1,6 @@
 import { V86 } from "../vendor/libv86.mjs";
 import { ACTIVE, BASE, PROFILES } from "./config.js";
+import { attach, close, register } from "./menu.js";
 
 // v86 drives its CPU loop from requestAnimationFrame, and browsers stop feeding
 // frames to tabs they consider hidden or occluded — the guest then crawls at a
@@ -92,7 +93,7 @@ ui.btnBoot.addEventListener("click", () => {
   boot();
 });
 
-ui.btnRun.addEventListener("click", async () => {
+async function toggleRun() {
   if (!emulator) return;
   if (emulator.is_running()) {
     await emulator.stop();
@@ -104,9 +105,9 @@ ui.btnRun.addEventListener("click", async () => {
     setStatus("运行中", "ok");
     focusConsole();
   }
-});
+}
 
-ui.btnReset.addEventListener("click", async () => {
+async function resetGuest() {
   if (!emulator) return;
   await emulator.destroy();
   emulator = null;
@@ -115,16 +116,17 @@ ui.btnReset.addEventListener("click", async () => {
   ui.metrics.textContent = "";
   term.clear();
   ui.screen.hidden = true;
-  ui.btnPaste.hidden = true;
   ui.terminal.classList.remove("hidden");
   ui.boot.hidden = false;
   setStatus("已停止");
-});
+}
+
+ui.btnRun.addEventListener("click", toggleRun);
+ui.btnReset.addEventListener("click", resetGuest);
 
 // No clipboard bridge exists in v86, so the only channel that reaches every
 // guest application without installing anything is the keyboard.
-ui.btnPaste = el("btn-paste");
-ui.btnPaste.addEventListener("click", async () => {
+async function pasteToGuest() {
   if (!emulator) return;
   let text = "";
   try {
@@ -139,7 +141,26 @@ ui.btnPaste.addEventListener("click", async () => {
   }
   setStatus(`正在把 ${text.length} 个字符打进 guest…`, "warn");
   emulator.keyboard_send_text(text);
+}
+
+const running = () => Boolean(emulator?.is_running());
+
+register({
+  id: "paste",
+  label: "粘贴剪贴板到 guest",
+  order: 10,
+  shown: () => running(),
+  run: pasteToGuest,
 });
+register({
+  id: "pause",
+  label: (ctx) => (running() ? "暂停" : "继续"),
+  order: 20,
+  shown: () => Boolean(emulator),
+  run: toggleRun,
+});
+register({ id: "reset", label: "重启", order: 30, separator: true, shown: () => Boolean(emulator), run: resetGuest });
+register({ id: "reload", label: "重新载入页面", order: 40, shown: () => !emulator, run: () => location.reload() });
 
 function focusConsole() {
   if (ACTIVE.console === "screen") ui.screen.focus();
@@ -150,7 +171,6 @@ async function boot() {
   const useScreen = ACTIVE.console === "screen";
   ui.terminal.classList.toggle("hidden", useScreen);
   ui.screen.hidden = !useScreen;
-  ui.btnPaste.hidden = !useScreen;
   setStatus("下载镜像");
 
   // Everything in the profile except our own UI fields is a v86 option.
@@ -247,4 +267,14 @@ async function boot() {
   }
 }
 
-window.browserLinux = { get emulator() { return emulator; }, term, profiles: PROFILES };
+attach(ui.screen, () => ({ emulator, profile: ACTIVE.label }));
+attach(ui.terminal, () => ({ emulator, profile: ACTIVE.label }));
+
+// Dev console surface: browserLinux.menu.register({...}) adds an action with no
+// further wiring.
+window.browserLinux = {
+  get emulator() { return emulator; },
+  term,
+  profiles: PROFILES,
+  menu: { register, attach, close },
+};
