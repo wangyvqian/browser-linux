@@ -105,7 +105,10 @@ button:disabled { opacity: .45; cursor: default; }
 #bootlog {
   margin: 0;
   padding: 8px 12px;
-  flex: 1;
+  flex: 1 1 auto;
+  /* Without this the item grows to its content inside a flex column and the
+     panel just clips it, so scrollTop has nothing to scroll. */
+  min-height: 0;
   overflow: auto;
   font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
   color: #9fb0c0;

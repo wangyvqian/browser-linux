@@ -158,15 +158,20 @@ async function boot() {
     panel.open = true;
     const summary = panel.querySelector("summary");
     let lastByteAt = Date.now();
+    let pendingBytes = "";
     emulator.add_listener("serial0-output-byte", (byte) => {
       lastByteAt = Date.now();
-      log.textContent += String.fromCharCode(byte);
-      if (log.textContent.length > 120000) log.textContent = log.textContent.slice(-60000);
-      // The <pre> only scrolls once it is actually overflowing; the panel
-      // itself can also be the scroller depending on how much is open.
-      log.scrollTop = log.scrollHeight;
-      panel.scrollTop = panel.scrollHeight;
+      pendingBytes += String.fromCharCode(byte);
     });
+    // One DOM write per flush: a byte at a time re-lays out the panel hundreds
+    // of times a second and is what makes the view feel frozen.
+    setInterval(() => {
+      if (!pendingBytes) return;
+      log.textContent += pendingBytes;
+      pendingBytes = "";
+      if (log.textContent.length > 120000) log.textContent = log.textContent.slice(-60000);
+      log.scrollTop = log.scrollHeight;
+    }, 120);
     // A quiet serial line and a dead page look identical from the outside.
     setInterval(() => {
       const idle = Math.round((Date.now() - lastByteAt) / 1000);
