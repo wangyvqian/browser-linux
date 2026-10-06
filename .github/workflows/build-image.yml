@@ -48,14 +48,12 @@ jobs:
           sudo mount --rbind /dev rootfs/dev
           sudo mount -t proc proc rootfs/proc
           sudo cp /etc/resolv.conf rootfs/etc/resolv.conf
-          sudo chroot rootfs /bin/sh -c '
-            apt-get update &&
-            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends
-              xserver-xorg xserver-xorg-video-fbdev xserver-xorg-input-evdev
-              x11-xserver-utils xterm openbox lxpanel pcmanfm
-              yaru-theme-gtk yaru-theme-icon fonts-dejavu-core fontconfig
-          '
-          sudo umount -R rootfs/proc rootfs/dev 2>/dev/null || true
+          sudo chroot rootfs apt-get update
+          sudo chroot rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            xserver-xorg xserver-xorg-video-fbdev xserver-xorg-input-evdev \
+            x11-xserver-utils xterm openbox lxpanel pcmanfm \
+            yaru-theme-gtk yaru-theme-icon fonts-dejavu-core fontconfig
+          sudo umount -R rootfs/dev rootfs/proc
 
       - name: Configure serial console and init
         run: |
