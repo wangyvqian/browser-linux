@@ -6,7 +6,8 @@ import { stat } from "node:fs/promises";
 const assets = [
   ["public/bios/seabios.bin", "https://copy.sh/v86/bios/seabios.bin"],
   ["public/bios/vgabios.bin", "https://copy.sh/v86/bios/vgabios.bin"],
-  ["public/images/buildroot-bzimage68.bin", "https://i.copy.sh/buildroot-bzimage68.bin"],
+  // Small enough to ship, and it is the only profile that needs no build.
+  ["public/images/linux.iso", "https://i.copy.sh/linux.iso"],
 ];
 
 for (const [target, url] of assets) {

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>本地助手连通性探针</title>
+    <style>
+      body { font: 14px/1.6 system-ui, sans-serif; margin: 2rem auto; max-width: 44rem; }
+      pre { background: #0b0f14; color: #d5dee8; padding: 12px; border-radius: 6px; min-height: 18rem; overflow: auto; }
+      button { font: inherit; padding: 8px 14px; margin-right: 8px; }
+      .ok { color: #0a7d38; } .bad { color: #b3261e; }
+    </style>
+  </head>
+  <body>
+    <h1>这个页面能不能连上本机的助手?</h1>
+    <p>
+      整个本地助手方案压在一个假设上:<code>https://&lt;pages域名&gt;</code> 的页面允许连
+      <code>127.0.0.1</code>。本地开发是 http,测不出这条,所以必须在已上线的 https 站点上跑这个页面。
+    </p>
+    <p>
+      先在终端起一个本机服务:<br />
+      <code>node tools/probe-server.mjs</code>
+    </p>
+    <p>
+      <button id="ws">测 WebSocket (48120)</button>
+      <button id="http">测 HTTP fetch (48121)</button>
+    </p>
+    <pre id="log">等待操作。当前来源:<span id="origin"></span></pre>
+
+    <script>
+      const log = document.getElementById("log");
+      const say = (text, cls) => {
+        const line = document.createElement("div");
+        if (cls) line.className = cls;
+        line.textContent = `${new Date().toISOString().slice(11, 19)}  ${text}`;
+        log.append(line);
+      };
+      document.getElementById("origin").textContent = location.origin;
+
+      document.getElementById("ws").addEventListener("click", () => {
+        const url = "ws://127.0.0.1:48120/probe";
+        say(`连接 ${url} ...`);
+        const socket = new WebSocket(url);
+        const timer = setTimeout(() => {
+          say("超时:5 秒内没有握手结果。要么本机没起服务,要么浏览器直接拦掉了连接。", "bad");
+          socket.close();
+        }, 5000);
+        socket.onopen = () => {
+          clearTimeout(timer);
+          say("onopen:握手成功 —— https 页面可以连本机 WebSocket。", "ok");
+          socket.send("ping");
+        };
+        socket.onmessage = (event) => say(`收到回复:${event.data}`, "ok");
+        socket.onerror = () => {
+          clearTimeout(timer);
+          say("onerror:连接失败。若本机服务确实在跑,这就是混合内容拦截。", "bad");
+        };
+        socket.onclose = (event) => say(`close code=${event.code} reason="${event.reason}"`);
+      });
+
+      document.getElementById("http").addEventListener("click", async () => {
+        const url = "http://127.0.0.1:48121/ping";
+        say(`fetch ${url} ...`);
+        try {
+          const response = await fetch(url, { method: "GET" });
+          const body = await response.text();
+          say(`HTTP ${response.status},响应体:${body}`, "ok");
+        } catch (error) {
+          say(`失败:${error.name} ${error.message} —— 被拦或本机没起服务。`, "bad");
+        }
+      });
+    </script>
+  </body>
+</html>

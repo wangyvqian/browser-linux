@@ -8,10 +8,14 @@
     "vendor": "node tools/sync-vendor.mjs",
     "assets": "node tools/fetch-assets.mjs",
     "setup": "npm run vendor && npm run assets",
-    "dev": "node tools/serve.mjs"
+    "dev": "node tools/serve.mjs",
+    "probe": "node tools/probe-server.mjs"
   },
   "dependencies": {
     "@xterm/xterm": "^6.0.0",
     "v86": "0.5.470"
+  },
+  "devDependencies": {
+    "ws": "^8.22.0"
   }
 }

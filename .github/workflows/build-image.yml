@@ -142,10 +142,10 @@ jobs:
       - name: Split into static-hosting chunks
         run: |
           curl -fsSL -o split-image.py https://raw.githubusercontent.com/copy/v86/master/tools/split-image.py
-          mkdir -p debian-chunks
-          python3 split-image.py --zstd 128k debian-desktop.img debian-chunks/chunk-%d-%d
-          ls debian-chunks | wc -l
-          du -sh debian-chunks
+          mkdir -p desktop-chunks
+          python3 split-image.py --zstd 128k debian-desktop.img desktop-chunks/chunk-%d-%d
+          ls desktop-chunks | wc -l
+          du -sh desktop-chunks
 
       - name: Stage kernel
         run: cp kernel-out/bzImage debian-bzImage
@@ -155,4 +155,44 @@ jobs:
           name: desktop-i386
           path: |
             debian-bzImage
-            debian-chunks
+            desktop-chunks
+
+  # The guests are assembled into the site here rather than committed to git:
+  # Pages serves them same-origin, and the repo stays free of binaries.
+  site:
+    needs: [terminal, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Fetch BIOS and the demo image
+        run: npm run assets
+
+      - name: Collect guest images
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "{terminal-i386,desktop-i386}"
+          path: public/images
+          merge-multiple: true
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
