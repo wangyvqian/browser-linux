@@ -32,16 +32,23 @@ const PROFILES = {
     options: { ...bios, cdrom: { url: path.join(root, "public/images/linux.iso") } },
     stages: [{ expect: /[%#$]\s*$/, send: "echo BOOT_OK; uname -a\n" }],
   },
-  debian: {
-    image: "Debian i386 terminal (initrd root)",
+  terminal: {
+    image: "Debian i386 terminal (guest disk)",
     console: "serial",
     options: {
       ...bios,
       bzimage: { url: path.join(root, "public/images/debian-bzImage"), async: false },
-      initrd: { url: path.join(root, "public/images/debian-initrd"), async: false },
-      cmdline: "console=ttyS0,115200 noapic nolapic",
+      hda: {
+        url: "public/images/guest-chunks/chunk.zst",
+        async: true,
+        use_parts: true,
+        fixed_chunk_size: 128 * 1024,
+        size: 2 * 1024 * 1024 * 1024,
+      },
+      cmdline: `root=/dev/sda rw console=ttyS0,115200 noapic nolapic${process.env.CMD_APPEND ? ` ${process.env.CMD_APPEND}` : ""}`,
     },
-    stages: [{ expect: /[%#$]\s*$/, send: "echo BOOT_OK; uname -r; head -2 /etc/os-release\n" }],
+    // inittab autologs root on ttyS0, so the first thing on the line is a shell.
+    stages: [{ expect: /[%#$]\s*$/, send: "echo BOOT_OK; uname -r; head -2 /etc/os-release; ls /bin/sh /lib/ld-linux.so.2\n" }],
   },
   desktop: {
     image: "Debian i386 desktop (ext4 disk, chunked)",
@@ -54,7 +61,7 @@ const PROFILES = {
       // v86's Node build resolves `url` as a filesystem path, not HTTP, so this
       // reads the same chunk files the browser fetches over HTTP.
       hda: {
-        url: "public/images/desktop-chunks/chunk.zst",
+        url: "public/images/guest-chunks/chunk.zst",
         async: true,
         use_parts: true,
         fixed_chunk_size: 128 * 1024,

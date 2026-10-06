@@ -76,6 +76,29 @@ button:disabled { opacity: .45; cursor: default; }
 
 .hidden { display: none !important; }
 
+#bootlog-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 42vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(11, 15, 20, 0.97);
+  border-top: 1px solid var(--line);
+}
+#bootlog-panel[hidden] { display: none; }
+#bootlog-panel summary { padding: 6px 12px; color: var(--dim); cursor: pointer; }
+#bootlog {
+  margin: 0;
+  padding: 8px 12px;
+  flex: 1;
+  overflow: auto;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: #9fb0c0;
+  white-space: pre-wrap;
+}
+
 .boot {
   position: fixed;
   inset: 0;

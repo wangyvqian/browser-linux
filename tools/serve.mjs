@@ -19,8 +19,22 @@ const mime = {
   ".svg": "image/svg+xml",
 };
 
+let chunkRequests = 0;
+let chunkWindow = Date.now();
+
 createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+  // Liveness signal while booting from a chunked disk: if this keeps ticking,
+  // the guest is reading its disk and is merely slow, not hung.
+  if (path.includes("/images/desktop-chunks/")) {
+    chunkRequests++;
+    if (chunkRequests % 200 === 0) {
+      const now = Date.now();
+      const perSecond = (200 * 1000) / (now - chunkWindow);
+      console.log(`chunks: ${chunkRequests} total, ${perSecond.toFixed(1)}/s`);
+      chunkWindow = now;
+    }
+  }
   // Resolve inside root only; ".." segments are normalised away before joining.
   const target = join(root, normalize(path === "/" ? "/index.html" : path));
   if (!target.startsWith(root)) {

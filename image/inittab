@@ -2,8 +2,11 @@ id:3:initdefault:
 
 si::sysinit:/etc/init.d/rcS
 
-1:2345:respawn:/sbin/getty 38400 tty1
-2:23:respawn:/sbin/getty 115200 ttyS0
+# Both consoles autologin as root: this box has no secrets and no network
+# facing login, and a password prompt on a serial line is pure friction.
+# /root/.profile decides whether tty1 also gets a desktop.
+1:2345:respawn:/sbin/getty -a root -L tty1 38400 linux
+2:23:respawn:/sbin/getty -a root -L ttyS0 115200 linux
 
 ~::ctrlaltdel:/sbin/reboot
 ~::shutdown:/etc/init.d/rc 0

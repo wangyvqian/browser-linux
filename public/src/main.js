@@ -26,7 +26,7 @@ for (const [key, profile] of Object.entries(PROFILES)) {
   option.textContent = profile.label;
   select.append(option);
 }
-select.value = new URLSearchParams(location.search).get("profile") ?? "test-vga";
+select.value = new URLSearchParams(location.search).get("profile") ?? "desktop";
 select.addEventListener("change", () => location.assign(`${location.pathname}?profile=${select.value}`));
 
 function setStatus(text, kind = "") {
@@ -125,9 +125,22 @@ async function boot() {
   if (useScreen) {
     // The guest only sees a relative pointer once the browser hands it over.
     ui.screen.addEventListener("click", () => emulator.lock_mouse());
-  }
 
-  if (!useScreen) {
+    // The screen shows the framebuffer, so without this mirror a guest that
+    // logs only to ttyS0 looks identical to a guest that has hung.
+    const panel = el("bootlog-panel");
+    const log = el("bootlog");
+    panel.hidden = false;
+    panel.open = true;
+    emulator.add_listener("serial0-output-byte", (byte) => {
+      log.textContent += String.fromCharCode(byte);
+      if (log.textContent.length > 120000) log.textContent = log.textContent.slice(-60000);
+      // The <pre> only scrolls once it is actually overflowing; the panel
+      // itself can also be the scroller depending on how much is open.
+      log.scrollTop = log.scrollHeight;
+      panel.scrollTop = panel.scrollHeight;
+    });
+  } else {
     term.onData((data) => emulator.serial0_send(data));
     emulator.add_listener("serial0-output-byte", (byte) => term.write(Uint8Array.of(byte)));
   }

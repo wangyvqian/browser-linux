@@ -1,12 +1,14 @@
 name: build-image
 
-# Two guests from one recipe:
-#   terminal — Debian i386 minbase packed as an initrd, small enough to boot
-#              straight from the network on every visit.
-#   desktop  — the same rootfs plus X, written into a real ext4 disk image and
-#              split into 128KB zstd chunks, because a 300MB desktop does not
-#              belong in memory and the disk is what makes it persistable.
-# v86 has no long mode, so everything here is 32-bit.
+# One guest, one disk. The same ext4 image boots into a serial shell or, with
+# browserlinux.desktop on the kernel cmdline, into X. It is split into 128KB
+# zstd chunks because that is what static hosting can serve piecewise and what
+# v86's use_parts loader expects.
+#
+# The earlier initrd path is gone: with Debian's merged-usr layout the initramfs
+# root has /bin, /sbin and /lib as symlinks, and exec of /init failed with ENOENT
+# even when pointing init= straight at /usr/bin/dash. The same files exec fine
+# from a disk, so the disk is the only boot path until that is understood.
 
 on:
   workflow_dispatch:
@@ -21,7 +23,8 @@ permissions:
 env:
   SUITE: bookworm
   MIRROR: http://deb.debian.org/debian
-  DESKTOP_PACKAGES: >-
+  PACKAGES: >-
+    sysvinit-core sysvinit-utils netbase iproute2 procps less vim-tiny
     xserver-xorg xserver-xorg-video-fbdev xserver-xorg-input-evdev
     x11-xserver-utils xterm openbox lxpanel pcmanfm
     yaru-theme-gtk yaru-theme-icon fonts-dejavu-core fontconfig
@@ -30,62 +33,7 @@ jobs:
   kernel:
     uses: ./.github/workflows/build-kernel.yml
 
-  terminal:
-    needs: kernel
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y debootstrap cpio
-
-      - name: Fetch custom kernel
-        uses: actions/download-artifact@v4
-        with:
-          name: kernel-i386
-          path: kernel-out
-
-      - name: Bootstrap rootfs
-        run: |
-          sudo debootstrap --arch=i386 --variant=minbase \
-            --include=sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
-            --exclude=systemd,systemd-sysv \
-            "$SUITE" rootfs "$MIRROR"
-          sudo cp image/init rootfs/init
-          sudo chmod 755 rootfs/init
-          sudo cp image/fstab rootfs/etc/fstab
-          sudo cp image/inittab rootfs/etc/inittab
-          echo browser-linux | sudo tee rootfs/etc/hostname
-          sudo sed -i 's|^root:[^:]*|root:|' rootfs/etc/shadow
-          sudo rm -rf rootfs/var/lib/apt/lists rootfs/var/cache/apt/archives \
-                      rootfs/usr/share/doc rootfs/usr/share/man \
-                      rootfs/usr/share/locale rootfs/usr/share/i18n rootfs/lib/modules
-
-      - name: Pack initrd
-        run: |
-          # Pack from inside the rootfs: the kernel looks for /init at the top
-          # level of the cpio, so a "rootfs/" prefix would hide it.
-          sudo sh -c 'cd rootfs && find . -depth -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9' > debian-initrd
-          ls -l debian-initrd
-          # GNU cpio stores "init", not "./init" — match both.
-          sudo sh -c 'gzip -dc debian-initrd | cpio -t --quiet 2>/dev/null' > entries.txt
-          grep -xE '(\./)?init' entries.txt
-
-      - name: Stage kernel
-        run: |
-          cp kernel-out/bzImage debian-bzImage
-          ls -l debian-bzImage
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: terminal-i386
-          path: |
-            debian-bzImage
-            debian-initrd
-
-  desktop:
+  guest:
     needs: kernel
     runs-on: ubuntu-latest
     steps:
@@ -102,10 +50,9 @@ jobs:
           name: kernel-i386
           path: kernel-out
 
-      - name: Bootstrap rootfs with X
+      - name: Bootstrap rootfs
         run: |
           sudo debootstrap --arch=i386 --variant=minbase \
-            --include=sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
             --exclude=systemd,systemd-sysv \
             "$SUITE" rootfs "$MIRROR"
           sudo mount --rbind /dev rootfs/dev
@@ -113,13 +60,13 @@ jobs:
           sudo cp /etc/resolv.conf rootfs/etc/resolv.conf
           sudo chroot rootfs apt-get update
           sudo chroot rootfs env DEBIAN_FRONTEND=noninteractive \
-            apt-get install -y --no-install-recommends $DESKTOP_PACKAGES
+            apt-get install -y --no-install-recommends $PACKAGES
           sudo umount -R rootfs/dev rootfs/proc
 
       - name: Configure the guest
         run: |
-          sudo cp image/fstab-desktop rootfs/etc/fstab
-          sudo cp image/inittab-desktop rootfs/etc/inittab
+          sudo cp image/inittab rootfs/etc/inittab
+          sudo cp image/fstab rootfs/etc/fstab
           sudo cp image/xsession rootfs/root/.xinitrc
           sudo cp image/profile rootfs/root/.profile
           sudo cp image/xorg.conf rootfs/etc/X11/xorg.conf
@@ -132,35 +79,32 @@ jobs:
 
       - name: Write the disk image
         run: |
-          # ext4 on an IDE disk: both are compiled into our kernel, so the guest
-          # mounts root straight from the disk with no initrd in the way.
-          truncate -s 2G debian-desktop.img
-          sudo mkfs.ext4 -q -L browserlinux -d rootfs debian-desktop.img
-          sudo tune2fs -O ^has_journal debian-desktop.img
-          df --output=used -B1 --total rootfs | tail -1
+          truncate -s 2G debian-guest.img
+          sudo mkfs.ext4 -q -L browserlinux -d rootfs debian-guest.img
+          sudo tune2fs -O ^has_journal debian-guest.img
 
       - name: Split into static-hosting chunks
         run: |
           curl -fsSL -o split-image.py https://raw.githubusercontent.com/copy/v86/master/tools/split-image.py
-          mkdir -p desktop-chunks
-          python3 split-image.py --zstd 128k debian-desktop.img desktop-chunks/chunk-%d-%d
-          ls desktop-chunks | wc -l
-          du -sh desktop-chunks
+          mkdir -p guest-chunks
+          python3 split-image.py --zstd 128k debian-guest.img guest-chunks/chunk-%d-%d
+          ls guest-chunks | wc -l
+          du -sh guest-chunks
 
       - name: Stage kernel
         run: cp kernel-out/bzImage debian-bzImage
 
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-i386
+          name: guest-i386
           path: |
             debian-bzImage
-            desktop-chunks
+            guest-chunks
 
   # The guests are assembled into the site here rather than committed to git:
   # Pages serves them same-origin, and the repo stays free of binaries.
   site:
-    needs: [terminal, desktop]
+    needs: guest
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -184,9 +128,8 @@ jobs:
       - name: Collect guest images
         uses: actions/download-artifact@v4
         with:
-          pattern: "{terminal-i386,desktop-i386}"
+          name: guest-i386
           path: public/images
-          merge-multiple: true
 
       - uses: actions/configure-pages@v4
 
@@ -204,7 +147,7 @@ jobs:
         run: |
           base="https://wangyvqian.github.io/browser-linux"
           refs=$(curl -s --max-time 30 "$base/" | grep -oE '(href|src)="[^"]+"' | sed -E 's/.*="([^"]+)"/\1/' | grep -v '^http' | sort -u)
-          paths="$refs images/desktop-chunks/chunk-0-131072.zst probe.html"
+          paths="$refs images/guest-chunks/chunk-0-131072.zst probe.html"
           echo "checking: $paths"
           for attempt in 1 2 3 4 5 6; do
             missing=""
