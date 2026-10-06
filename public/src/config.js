@@ -19,7 +19,9 @@ const common = {
     url: at("images/guest-chunks/chunk.zst"),
     async: true,
     use_parts: true,
-    fixed_chunk_size: 128 * 1024,
+    // 1MB, not v86's 128KB example default: booting touches thousands of
+    // chunks and the cost is one HTTPS round trip each, not the bytes.
+    fixed_chunk_size: 1024 * 1024,
     size: 2 * 1024 * 1024 * 1024,
   },
 };

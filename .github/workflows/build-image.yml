@@ -90,7 +90,7 @@ jobs:
         run: |
           curl -fsSL -o split-image.py https://raw.githubusercontent.com/copy/v86/master/tools/split-image.py
           mkdir -p guest-chunks
-          python3 split-image.py --zstd 128k debian-guest.img guest-chunks/chunk-%d-%d
+          python3 split-image.py --zstd 1m debian-guest.img guest-chunks/chunk-%d-%d
           ls guest-chunks | wc -l
           du -sh guest-chunks
 
@@ -134,6 +134,9 @@ jobs:
           name: guest-i386
           path: public/images
 
+      - name: Stamp the cache version
+        run: sed -i "s/__BUILD__/${GITHUB_RUN_ID}/" public/sw.js
+
       - uses: actions/configure-pages@v4
 
       - uses: actions/upload-pages-artifact@v3
@@ -150,7 +153,7 @@ jobs:
         run: |
           base="https://wangyvqian.github.io/browser-linux"
           refs=$(curl -s --max-time 30 "$base/" | grep -oE '(href|src)="[^"]+"' | sed -E 's/.*="([^"]+)"/\1/' | grep -v '^http' | sort -u)
-          paths="$refs images/guest-chunks/chunk-0-131072.zst probe.html"
+          paths="$refs images/guest-chunks/chunk-0-1048576.zst probe.html"
           echo "checking: $paths"
           for attempt in 1 2 3 4 5 6; do
             missing=""

@@ -9,6 +9,12 @@ window.requestAnimationFrame = (callback) =>
   setTimeout(() => callback(performance.now()), 0);
 window.cancelAnimationFrame = (handle) => clearTimeout(handle);
 
+// Keeps the guest's chunks and BIOS across visits; Pages only caches them for
+// ten minutes on its own.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register(new URL("sw.js", location.href)).catch(() => {});
+}
+
 const el = (id) => document.getElementById(id);
 const ui = {
   boot: el("boot"),
