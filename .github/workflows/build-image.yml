@@ -25,7 +25,7 @@ env:
   MIRROR: http://deb.debian.org/debian
   PACKAGES: >-
     sysvinit-core sysvinit-utils netbase iproute2 procps less vim-tiny
-    xserver-xorg xserver-xorg-video-fbdev xserver-xorg-input-evdev
+    xinit xserver-xorg xserver-xorg-video-fbdev xserver-xorg-input-evdev
     x11-xserver-utils xterm openbox lxpanel pcmanfm
     yaru-theme-gtk yaru-theme-icon fonts-dejavu-core fontconfig
 

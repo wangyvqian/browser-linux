@@ -75,9 +75,10 @@ setInterval(() => {
   const now = performance.now();
   const mips = ((ipc - counters.ipc) / (now - counters.at)) * 1000 / 1e6;
   counters = { ipc, at: now };
-  ui.metrics.textContent = mips < 5
-    ? `${mips.toFixed(1)} MIPS · 疑似被限速`
-    : `${mips.toFixed(1)} MIPS`;
+  // A guest parked at a prompt is idle, not throttled — only blame the browser
+  // when it really has the page hidden.
+  const note = mips >= 5 ? "" : document.hidden ? " · 页面在后台" : " · 空闲或被限速";
+  ui.metrics.textContent = `${mips.toFixed(1)} MIPS${note}`;
 }, 1000);
 
 ui.btnBoot.addEventListener("click", () => {
