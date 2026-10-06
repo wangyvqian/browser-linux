@@ -16,6 +16,9 @@ on:
     paths:
       - ".github/workflows/build-image.yml"
       - "image/**"
+      # The site is assembled from public/, so a frontend change has to redeploy
+      # too — otherwise the fix lives in git and nowhere a user can see.
+      - "public/**"
 
 permissions:
   contents: write
