@@ -1,6 +1,14 @@
 import { V86 } from "../vendor/libv86.mjs";
 import { ACTIVE, BASE, PROFILES } from "./config.js";
 
+// v86 drives its CPU loop from requestAnimationFrame, and browsers stop feeding
+// frames to tabs they consider hidden or occluded — the guest then crawls at a
+// fraction of a MIPS and looks hung. A timer keeps the loop running when the
+// user switches away, which is the whole point of a machine you leave open.
+window.requestAnimationFrame = (callback) =>
+  setTimeout(() => callback(performance.now()), 0);
+window.cancelAnimationFrame = (handle) => clearTimeout(handle);
+
 const el = (id) => document.getElementById(id);
 const ui = {
   boot: el("boot"),
@@ -43,13 +51,20 @@ const term = new window.Terminal({
 });
 term.open(ui.terminal);
 
+const fit = new window.FitAddon.FitAddon();
+term.loadAddon(fit);
+
 function sizeTerminal() {
-  const cols = Math.max(20, Math.floor(ui.terminal.clientWidth / 8.6));
-  const rows = Math.max(6, Math.floor(ui.terminal.clientHeight / 19));
   if (ui.terminal.classList.contains("hidden")) return;
-  term.resize(cols, rows);
+  try {
+    fit.fit();
+  } catch {
+    // The container can be measured as zero during a layout flip; the next
+    // resize event will get it.
+  }
 }
 new ResizeObserver(sizeTerminal).observe(ui.terminal);
+window.addEventListener("resize", sizeTerminal);
 
 let emulator = null;
 let counters = { ipc: 0, at: 0 };
@@ -60,7 +75,9 @@ setInterval(() => {
   const now = performance.now();
   const mips = ((ipc - counters.ipc) / (now - counters.at)) * 1000 / 1e6;
   counters = { ipc, at: now };
-  ui.metrics.textContent = `${mips.toFixed(1)} MIPS`;
+  ui.metrics.textContent = mips < 5
+    ? `${mips.toFixed(1)} MIPS · 疑似被限速`
+    : `${mips.toFixed(1)} MIPS`;
 }, 1000);
 
 ui.btnBoot.addEventListener("click", () => {
@@ -119,7 +136,13 @@ async function boot() {
     autostart: true,
     disable_speaker: true,
     ...images,
-    ...(useScreen ? { screen: { container: ui.screen } } : {}),
+    ...(useScreen
+      ? {
+          // Graphical text mode puts the console on a canvas, which the browser
+          // can then scale to the window; the DOM text renderer cannot.
+          screen: { container: ui.screen, use_graphical_text: true },
+        }
+      : {}),
   });
 
   if (useScreen) {
@@ -164,6 +187,7 @@ async function boot() {
     ui.btnReset.disabled = false;
     ui.btnRun.textContent = "暂停";
     counters = { ipc: emulator.get_instruction_counter(), at: performance.now() };
+    sizeTerminal();
     focusConsole();
   });
 
