@@ -155,7 +155,10 @@ async function boot() {
     const log = el("bootlog");
     panel.hidden = false;
     panel.open = true;
+    const summary = panel.querySelector("summary");
+    let lastByteAt = Date.now();
     emulator.add_listener("serial0-output-byte", (byte) => {
+      lastByteAt = Date.now();
       log.textContent += String.fromCharCode(byte);
       if (log.textContent.length > 120000) log.textContent = log.textContent.slice(-60000);
       // The <pre> only scrolls once it is actually overflowing; the panel
@@ -163,6 +166,11 @@ async function boot() {
       log.scrollTop = log.scrollHeight;
       panel.scrollTop = panel.scrollHeight;
     });
+    // A quiet serial line and a dead page look identical from the outside.
+    setInterval(() => {
+      const idle = Math.round((Date.now() - lastByteAt) / 1000);
+      summary.textContent = `启动日志(串口镜像) · ${idle < 3 ? "正在输出" : `已静默 ${idle}s`}`;
+    }, 1000);
   } else {
     term.onData((data) => emulator.serial0_send(data));
     emulator.add_listener("serial0-output-byte", (byte) => term.write(Uint8Array.of(byte)));
