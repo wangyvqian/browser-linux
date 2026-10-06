@@ -42,12 +42,29 @@ jobs:
             --exclude=systemd,systemd-sysv \
             bookworm rootfs http://deb.debian.org/debian
 
+      - name: Install the desktop stack
+        run: |
+          set -euo pipefail
+          sudo mount --rbind /dev rootfs/dev
+          sudo mount -t proc proc rootfs/proc
+          sudo cp /etc/resolv.conf rootfs/etc/resolv.conf
+          sudo chroot rootfs /bin/sh -c '
+            apt-get update &&
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends
+              xserver-xorg xserver-xorg-video-fbdev xserver-xorg-input-evdev
+              x11-xserver-utils xterm openbox lxpanel pcmanfm
+              yaru-theme-gtk yaru-theme-icon fonts-dejavu-core fontconfig
+          '
+          sudo umount -R rootfs/proc rootfs/dev 2>/dev/null || true
+
       - name: Configure serial console and init
         run: |
           sudo cp image/inittab rootfs/etc/inittab
           sudo cp image/fstab rootfs/etc/fstab
           sudo cp image/init rootfs/init
-          sudo chmod 755 rootfs/init
+          sudo cp image/xsession rootfs/root/.xinitrc
+          sudo cp image/xorg.conf rootfs/etc/X11/xorg.conf
+          sudo chmod 755 rootfs/init rootfs/root/.xinitrc
           echo "browser-linux" | sudo tee rootfs/etc/hostname
           # Empty password field so getty on ttyS0 drops straight into root.
           sudo sed -i 's|^root:[^:]*|root:|' rootfs/etc/shadow

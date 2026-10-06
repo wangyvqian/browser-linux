@@ -19,6 +19,16 @@ const ui = {
 
 ui.bootTitle.textContent = ACTIVE.label;
 
+const select = el("profile");
+for (const [key, profile] of Object.entries(PROFILES)) {
+  const option = document.createElement("option");
+  option.value = key;
+  option.textContent = profile.label;
+  select.append(option);
+}
+select.value = new URLSearchParams(location.search).get("profile") ?? "test-vga";
+select.addEventListener("change", () => location.assign(`/?profile=${select.value}`));
+
 function setStatus(text, kind = "") {
   ui.status.textContent = text;
   ui.status.dataset.kind = kind;
@@ -97,21 +107,25 @@ async function boot() {
   ui.screen.hidden = !useScreen;
   setStatus("下载镜像");
 
-  const options = {
+  // Everything in the profile except our own UI fields is a v86 option.
+  const images = { ...ACTIVE };
+  delete images.label;
+  delete images.console;
+  delete images.memory_size;
+
+  emulator = new V86({
     wasm_path: "/vendor/v86.wasm",
     memory_size: ACTIVE.memory_size,
     autostart: true,
     disable_speaker: true,
-    ...(ACTIVE.bzimage ? { bzimage: ACTIVE.bzimage } : {}),
-    ...(ACTIVE.cdrom ? { cdrom: ACTIVE.cdrom } : {}),
-    ...(ACTIVE.bios ? { bios: ACTIVE.bios } : {}),
-    ...(ACTIVE.vga_bios ? { vga_bios: ACTIVE.vga_bios } : {}),
-    ...(ACTIVE.filesystem ? { filesystem: ACTIVE.filesystem } : {}),
-    ...(ACTIVE.cmdline ? { cmdline: ACTIVE.cmdline } : {}),
+    ...images,
     ...(useScreen ? { screen: { container: ui.screen } } : {}),
-  };
+  });
 
-  emulator = new V86(options);
+  if (useScreen) {
+    // The guest only sees a relative pointer once the browser hands it over.
+    ui.screen.addEventListener("click", () => emulator.lock_mouse());
+  }
 
   if (!useScreen) {
     term.onData((data) => emulator.serial0_send(data));

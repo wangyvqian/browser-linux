@@ -1,9 +1,21 @@
 #!/bin/sh
 # The rootfs is loaded as an initrd, and the kernel only ever execs /init from
-# an initramfs. Mount the kernel filesystems, then hand over to sysvinit.
+# an initramfs. Mount the kernel filesystems, then either hand over to sysvinit
+# (terminal profile) or bring up X directly (desktop profile).
 mount -t proc proc /proc
 mount -t sysfs sys /sys
 mount -t devtmpfs dev /dev
 mount -t tmpfs tmpfs /run
+
+# Keep a shell on the serial line either way: it is the only boot log the page
+# can show, and the smoke test types into it.
+setsid /bin/sh --login </dev/ttyS0 >/dev/ttyS0 2>&1 &
+
+if grep -q browserlinux.desktop /proc/cmdline; then
+    setsid /usr/bin/X :0 -audit 0 -nolisten tcp vt7 >/dev/ttyS0 2>&1 &
+    sleep 5
+    DISPLAY=:0 setsid /root/.xinitrc >/dev/ttyS0 2>&1 &
+    wait
+fi
 
 exec /sbin/init "$@"

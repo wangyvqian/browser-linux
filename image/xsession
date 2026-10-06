@@ -1,0 +1,14 @@
+#!/bin/sh
+# Started by /init when the kernel cmdline contains "browserlinux.desktop".
+# Deliberately no display manager and no compositor: both cost more under
+# emulation than everything else on screen.
+export HOME=/root
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+xsetroot -solid "#2c001e" >/dev/null 2>&1 &
+
+lxpanel &
+pcmanfm --desktop &
+xterm -bg "#300a24" -fg "#ffffff" -geometry 80x24+120+140 &
+
+exec openbox-session
