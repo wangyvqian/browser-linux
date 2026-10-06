@@ -115,9 +115,30 @@ ui.btnReset.addEventListener("click", async () => {
   ui.metrics.textContent = "";
   term.clear();
   ui.screen.hidden = true;
+  ui.btnPaste.hidden = true;
   ui.terminal.classList.remove("hidden");
   ui.boot.hidden = false;
   setStatus("已停止");
+});
+
+// No clipboard bridge exists in v86, so the only channel that reaches every
+// guest application without installing anything is the keyboard.
+ui.btnPaste = el("btn-paste");
+ui.btnPaste.addEventListener("click", async () => {
+  if (!emulator) return;
+  let text = "";
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    setStatus("浏览器拒绝了剪贴板读取,请在地址栏允许后重试", "bad");
+    return;
+  }
+  if (!text) {
+    setStatus("剪贴板是空的", "warn");
+    return;
+  }
+  setStatus(`正在把 ${text.length} 个字符打进 guest…`, "warn");
+  emulator.keyboard_send_text(text);
 });
 
 function focusConsole() {
@@ -129,6 +150,7 @@ async function boot() {
   const useScreen = ACTIVE.console === "screen";
   ui.terminal.classList.toggle("hidden", useScreen);
   ui.screen.hidden = !useScreen;
+  ui.btnPaste.hidden = !useScreen;
   setStatus("下载镜像");
 
   // Everything in the profile except our own UI fields is a v86 option.
