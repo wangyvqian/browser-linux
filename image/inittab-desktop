@@ -1,0 +1,12 @@
+id:3:initdefault:
+
+si::sysinit:/etc/init.d/rcS
+
+# Autologin on tty1; /root/.profile starts X there. The desktop is a session,
+# not a service, so it is deliberately not under respawn — a crash should show
+# a shell, not loop.
+1:2345:respawn:/sbin/getty -a root -L tty1 38400 linux
+2:23:respawn:/sbin/getty 115200 ttyS0
+
+~::ctrlaltdel:/sbin/reboot
+~::shutdown:/etc/init.d/rc 0

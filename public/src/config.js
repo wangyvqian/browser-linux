@@ -29,8 +29,16 @@ export const PROFILES = {
     bios: { url: "/bios/seabios.bin" },
     vga_bios: { url: "/bios/vgabios.bin" },
     bzimage: { url: "/images/debian-bzImage", async: false },
-    initrd: { url: "/images/debian-initrd", async: false },
-    cmdline: "console=ttyS0,115200 noapic nolapic tsc=reliable mitigations=off browserlinux.desktop",
+    // A real disk, not an initrd: it is what makes the desktop persist, and
+    // chunking keeps every request small enough for static hosting.
+    hda: {
+      url: "/images/desktop-chunks/chunk.zst",
+      async: true,
+      use_parts: true,
+      fixed_chunk_size: 128 * 1024,
+      size: 2 * 1024 * 1024 * 1024,
+    },
+    cmdline: "root=/dev/sda rw console=ttyS0,115200 noapic nolapic tsc=reliable mitigations=off",
   },
 };
 

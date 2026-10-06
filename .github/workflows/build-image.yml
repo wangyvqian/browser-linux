@@ -1,8 +1,12 @@
 name: build-image
 
-# Builds the guest: a Debian i386 rootfs packed as an initrd, paired with the
-# built-in-driver kernel from build-kernel. v86 has no long mode, so every
-# artifact here is 32-bit.
+# Two guests from one recipe:
+#   terminal — Debian i386 minbase packed as an initrd, small enough to boot
+#              straight from the network on every visit.
+#   desktop  — the same rootfs plus X, written into a real ext4 disk image and
+#              split into 128KB zstd chunks, because a 300MB desktop does not
+#              belong in memory and the disk is what makes it persistable.
+# v86 has no long mode, so everything here is 32-bit.
 
 on:
   workflow_dispatch:
@@ -14,11 +18,19 @@ on:
 permissions:
   contents: write
 
+env:
+  SUITE: bookworm
+  MIRROR: http://deb.debian.org/debian
+  DESKTOP_PACKAGES: >-
+    xserver-xorg xserver-xorg-video-fbdev xserver-xorg-input-evdev
+    x11-xserver-utils xterm openbox lxpanel pcmanfm
+    yaru-theme-gtk yaru-theme-icon fonts-dejavu-core fontconfig
+
 jobs:
   kernel:
     uses: ./.github/workflows/build-kernel.yml
 
-  debian-i386:
+  terminal:
     needs: kernel
     runs-on: ubuntu-latest
     steps:
@@ -35,44 +47,21 @@ jobs:
           name: kernel-i386
           path: kernel-out
 
-      - name: Bootstrap Debian i386 rootfs
+      - name: Bootstrap rootfs
         run: |
           sudo debootstrap --arch=i386 --variant=minbase \
             --include=sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
             --exclude=systemd,systemd-sysv \
-            bookworm rootfs http://deb.debian.org/debian
-
-      - name: Install the desktop stack
-        run: |
-          set -euo pipefail
-          sudo mount --rbind /dev rootfs/dev
-          sudo mount -t proc proc rootfs/proc
-          sudo cp /etc/resolv.conf rootfs/etc/resolv.conf
-          sudo chroot rootfs apt-get update
-          sudo chroot rootfs env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            xserver-xorg xserver-xorg-video-fbdev xserver-xorg-input-evdev \
-            x11-xserver-utils xterm openbox lxpanel pcmanfm \
-            yaru-theme-gtk yaru-theme-icon fonts-dejavu-core fontconfig
-          sudo umount -R rootfs/dev rootfs/proc
-
-      - name: Configure serial console and init
-        run: |
-          sudo cp image/inittab rootfs/etc/inittab
-          sudo cp image/fstab rootfs/etc/fstab
+            "$SUITE" rootfs "$MIRROR"
           sudo cp image/init rootfs/init
-          sudo cp image/xsession rootfs/root/.xinitrc
-          sudo cp image/xorg.conf rootfs/etc/X11/xorg.conf
-          sudo chmod 755 rootfs/init rootfs/root/.xinitrc
-          echo "browser-linux" | sudo tee rootfs/etc/hostname
-          # Empty password field so getty on ttyS0 drops straight into root.
+          sudo chmod 755 rootfs/init
+          sudo cp image/fstab rootfs/etc/fstab
+          sudo cp image/inittab rootfs/etc/inittab
+          echo browser-linux | sudo tee rootfs/etc/hostname
           sudo sed -i 's|^root:[^:]*|root:|' rootfs/etc/shadow
-
-      - name: Trim the rootfs
-        run: |
           sudo rm -rf rootfs/var/lib/apt/lists rootfs/var/cache/apt/archives \
-                     rootfs/usr/share/doc rootfs/usr/share/man rootfs/usr/share/locale \
-                     rootfs/usr/share/i18n rootfs/lib/modules
-          sudo du -sh rootfs
+                      rootfs/usr/share/doc rootfs/usr/share/man \
+                      rootfs/usr/share/locale rootfs/usr/share/i18n rootfs/lib/modules
 
       - name: Pack initrd
         run: |
@@ -80,7 +69,9 @@ jobs:
           # level of the cpio, so a "rootfs/" prefix would hide it.
           sudo sh -c 'cd rootfs && find . -depth -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9' > debian-initrd
           ls -l debian-initrd
-          sudo sh -c 'gzip -dc debian-initrd | cpio -t 2>/dev/null' | grep -cE '^\./init$' | grep -q '^[1-9]' || { echo "init missing from archive"; exit 1; }
+          echo '--- top-level entries in the archive ---'
+          sudo sh -c 'gzip -dc debian-initrd | cpio -t --quiet 2>/dev/null' | grep -vE '^\./[^/]+/' | head -20
+          sudo sh -c 'gzip -dc debian-initrd | cpio -t --quiet 2>/dev/null' | grep -qxE '\./?init'
 
       - name: Stage kernel
         run: |
@@ -89,7 +80,79 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: debian-i386
+          name: terminal-i386
           path: |
             debian-bzImage
             debian-initrd
+
+  desktop:
+    needs: kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap zstd
+
+      - name: Fetch custom kernel
+        uses: actions/download-artifact@v4
+        with:
+          name: kernel-i386
+          path: kernel-out
+
+      - name: Bootstrap rootfs with X
+        run: |
+          sudo debootstrap --arch=i386 --variant=minbase \
+            --include=sysvinit-core,sysvinit-utils,netbase,iproute2,procps,less,vim-tiny \
+            --exclude=systemd,systemd-sysv \
+            "$SUITE" rootfs "$MIRROR"
+          sudo mount --rbind /dev rootfs/dev
+          sudo mount -t proc proc rootfs/proc
+          sudo cp /etc/resolv.conf rootfs/etc/resolv.conf
+          sudo chroot rootfs apt-get update
+          sudo chroot rootfs env DEBIAN_FRONTEND=noninteractive \
+            apt-get install -y --no-install-recommends $DESKTOP_PACKAGES
+          sudo umount -R rootfs/dev rootfs/proc
+
+      - name: Configure the guest
+        run: |
+          sudo cp image/fstab-desktop rootfs/etc/fstab
+          sudo cp image/inittab-desktop rootfs/etc/inittab
+          sudo cp image/xsession rootfs/root/.xinitrc
+          sudo cp image/profile rootfs/root/.profile
+          sudo cp image/xorg.conf rootfs/etc/X11/xorg.conf
+          sudo chmod 755 rootfs/root/.xinitrc
+          echo browser-linux | sudo tee rootfs/etc/hostname
+          sudo sed -i 's|^root:[^:]*|root:|' rootfs/etc/shadow
+          sudo rm -rf rootfs/var/lib/apt/lists rootfs/var/cache/apt/archives \
+                      rootfs/usr/share/man rootfs/usr/share/locale rootfs/lib/modules
+          sudo du -sh rootfs
+
+      - name: Write the disk image
+        run: |
+          # ext4 on an IDE disk: both are compiled into our kernel, so the guest
+          # mounts root straight from the disk with no initrd in the way.
+          truncate -s 2G debian-desktop.img
+          sudo mkfs.ext4 -q -L browserlinux -d rootfs debian-desktop.img
+          sudo tune2fs -O ^has_journal debian-desktop.img
+          df --output=used -B1 --total rootfs | tail -1
+
+      - name: Split into static-hosting chunks
+        run: |
+          curl -fsSL -o split-image.py https://raw.githubusercontent.com/copy/v86/master/tools/split-image.py
+          mkdir -p debian-chunks
+          python3 split-image.py --zstd 128k debian-desktop.img debian-chunks/chunk-%d-%d
+          ls debian-chunks | wc -l
+          du -sh debian-chunks
+
+      - name: Stage kernel
+        run: cp kernel-out/bzImage debian-bzImage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-i386
+          path: |
+            debian-bzImage
+            debian-chunks

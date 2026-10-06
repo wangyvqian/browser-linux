@@ -1,0 +1,6 @@
+# Started by the autologin getty on tty1. X lives or dies with the session so a
+# crash falls back to a shell instead of a respawn loop.
+if [ "$(id -u)" = "0" ] && [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
+    echo "Starting the desktop. Type 'startx' again if it exits."
+    exec startx
+fi
