@@ -191,7 +191,11 @@ async function boot() {
     }
   });
 
-  emulator.add_listener("download-error", (p) => setStatus(`下载失败: ${p.file_name}`, "bad"));
+  let downloadFailed = false;
+  emulator.add_listener("download-error", (p) => {
+    downloadFailed = true;
+    setStatus(`镜像下载失败:${p.file_name} — 检查网络后点“重启”再试`, "bad");
+  });
 
   emulator.add_listener("emulator-started", () => {
     ui.progress.hidden = true;
@@ -208,7 +212,9 @@ async function boot() {
   try {
     await emulator.run();
   } catch (error) {
-    setStatus(`启动失败: ${error.message}`, "bad");
+    // v86 reports a failed image load as an internal TypeError; the download
+    // listener already said the useful part.
+    if (!downloadFailed) setStatus(`启动失败: ${error.message}`, "bad");
     console.error(error);
   }
 }
