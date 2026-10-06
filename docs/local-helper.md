@@ -46,6 +46,8 @@ my-linux/
 
 ## 配对与鉴权
 
+**前提已验证(2026-10-06)**:从线上 `https://wangyvqian.github.io/browser-linux/probe.html` 发起,`ws://127.0.0.1:48120` 握手成功并双向收发,`fetch("http://127.0.0.1:48121/ping")` 返回 200 并读到响应体。本机服务能看到请求头 `Origin: https://wangyvqian.github.io`,所以按来源做白名单可行。随时可用 `public/probe.html` + `tools/probe-server.mjs` 复验。
+
 本地任意端口都是攻击面:任何网页都能连 `ws://127.0.0.1:48120`。不校验等于给用户装了个别人可借用的代理。
 
 1. 页面生成一次性 token(`crypto.getRandomValues`,16 字节,60 秒过期)。
