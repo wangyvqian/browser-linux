@@ -33,7 +33,9 @@ export const PROFILES = {
     console: "screen",
     ...common,
     // tty0 first so the screen shows boot progress instead of staying black.
-    cmdline: "root=/dev/sda rw console=tty0 console=ttyS0,115200 noapic nolapic tsc=reliable mitigations=off browserlinux.desktop",
+    // vga=0x117 asks the BIOS for 800x600x16 so vesafb has a framebuffer to
+    // bind; without a graphics mode there is no /dev/fb0 and X finds no screen.
+    cmdline: "root=/dev/sda rw vga=0x117 console=tty0 console=ttyS0,115200 noapic nolapic tsc=reliable mitigations=off browserlinux.desktop",
   },
   terminal: {
     label: "Debian i386 (串口终端)",
